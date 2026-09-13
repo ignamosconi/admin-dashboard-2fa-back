@@ -208,8 +208,7 @@ export class AdminAuthService implements IAdminAuthService {
     admin.totpSecret = this.encryptTotp(plainSecret);
     // No activamos todavía — se activa en confirm2fa
     await this.adminRepository.save(admin);
-
-    const otpAuthUrl = authenticator.keyuri(admin.username, 'SSO FRVM', plainSecret);
+    const otpAuthUrl = authenticator.keyuri(admin.username, this.configService.getOrThrow<string>('APP_NAME'), plainSecret);
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
 
     // Emitir un nuevo pending token con purpose '2fa-confirm' para el siguiente paso.
