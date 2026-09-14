@@ -4,7 +4,7 @@ import { Injectable, Inject, UnauthorizedException, ServiceUnavailableException 
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
-import { IPendingChallengeService, ChallengeConsumeResult } from './pending-challenge.service.interface.js';
+import { IPendingChallengeService, ChallengeConsumeResult } from './interfaces/pending-challenge.service.interface.js';
 
 interface ChallengePayload {
   adminId: string;
