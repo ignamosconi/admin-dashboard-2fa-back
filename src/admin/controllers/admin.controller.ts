@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Inject, UseGuards, ParseUUIDPipe, Request } from '@nestjs/common';
 import { AdminJwtPayloadDto } from '../../admin-auth/dtos/admin-jwt-payload.dto.js';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { IAdminController } from './admin.controller.interface.js';
-import type { IAdminService } from '../services/admin.service.interface.js';
+import { IAdminController } from './interfaces/admin.controller.interface.js';
+import type { IAdminService } from '../services/interfaces/admin.service.interface.js';
 import { CreateAdminDto } from '../dtos/create-admin.dto.js';
 import { UpdateAdminDto } from '../dtos/update-admin.dto.js';
 import { AdminResponseDto } from '../dtos/admin-response.dto.js';

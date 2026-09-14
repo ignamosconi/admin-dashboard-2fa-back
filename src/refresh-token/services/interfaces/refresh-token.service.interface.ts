@@ -1,4 +1,4 @@
-import { RefreshTokenEntity } from '../entities/refresh-token.entity.js';
+import { RefreshTokenEntity } from "src/refresh-token/entities/refresh-token.entity";
 import { EntityManager } from 'typeorm';
 
 export interface SaveRefreshTokenParams {

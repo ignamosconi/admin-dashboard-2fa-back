@@ -20,7 +20,7 @@ import { Admin2faValidateDto } from '../dtos/admin-2fa-validate.dto.js';
 import { AdminRefreshRequestDto } from '../dtos/admin-refresh-request.dto.js';
 import { AdminLogoutRequestDto } from '../dtos/admin-logout-request.dto.js';
 import { TokenResponseDto } from '../dtos/token-response.dto.js';
-import type { IRefreshTokenService } from '../../refresh-token/services/refresh-token.service.interface.js';
+import type { IRefreshTokenService } from 'src/refresh-token/services/interfaces/refresh-token.service.interface.js';
 import { Admin2faResetDto } from '../dtos/admin-2fa-reset.dto.js';
 
 // Payload interno del JWT pending — incluye jti para referenciar el challenge en Redis

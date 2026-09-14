@@ -2,8 +2,8 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { IAdminService } from './admin.service.interface.js';
-import type { IRefreshTokenService } from '../../refresh-token/services/refresh-token.service.interface.js';
+import { IAdminService } from './interfaces/admin.service.interface.js';
+import type { IRefreshTokenService } from 'src/refresh-token/services/interfaces/refresh-token.service.interface.js';
 import { AdminEntity } from '../entities/admin.entity.js';
 import { CreateAdminDto } from '../dtos/create-admin.dto.js';
 import { UpdateAdminDto } from '../dtos/update-admin.dto.js';

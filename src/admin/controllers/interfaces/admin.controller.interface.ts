@@ -1,7 +1,7 @@
-import { CreateAdminDto } from '../dtos/create-admin.dto.js';
-import { UpdateAdminDto } from '../dtos/update-admin.dto.js';
-import { AdminResponseDto } from '../dtos/admin-response.dto.js';
-import { AdminJwtPayloadDto } from '../../admin-auth/dtos/admin-jwt-payload.dto.js';
+import { CreateAdminDto } from 'src/admin/dtos/create-admin.dto.js';
+import { UpdateAdminDto } from 'src/admin/dtos/update-admin.dto.js';
+import { AdminResponseDto } from 'src/admin/dtos/admin-response.dto';
+import { AdminJwtPayloadDto } from 'src/admin-auth/dtos/admin-jwt-payload.dto';
 
 interface RequestWithAdmin {
   admin: AdminJwtPayloadDto;

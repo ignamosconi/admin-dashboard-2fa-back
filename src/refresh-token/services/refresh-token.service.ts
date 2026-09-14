@@ -4,7 +4,7 @@ import { EntityManager, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { RefreshTokenEntity } from '../entities/refresh-token.entity.js';
-import { IRefreshTokenService, SaveRefreshTokenParams } from './refresh-token.service.interface.js';
+import { IRefreshTokenService, SaveRefreshTokenParams } from './interfaces/refresh-token.service.interface.js';
 
 @Injectable()
 export class RefreshTokenService implements IRefreshTokenService {
