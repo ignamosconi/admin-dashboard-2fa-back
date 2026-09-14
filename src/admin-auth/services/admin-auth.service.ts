@@ -1,6 +1,4 @@
 import { Inject, Injectable, UnauthorizedException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -10,6 +8,7 @@ import { authenticator } from 'otplib';
 import * as QRCode from 'qrcode';
 import { IAdminAuthService } from './interfaces/admin-auth.service.interface.js';
 import type { IPendingChallengeService } from './interfaces/pending-challenge.service.interface.js';
+import type { IAdminRepository } from '../../admin/repositories/interfaces/admin.repository.interface.js';
 import { AdminEntity } from '../../admin/entities/admin.entity.js';
 import { AdminLoginRequestDto } from '../dtos/admin-login-request.dto.js';
 import { AdminLoginResponseDto } from '../dtos/admin-login-response.dto.js';
@@ -23,7 +22,6 @@ import { TokenResponseDto } from '../dtos/token-response.dto.js';
 import type { IRefreshTokenService } from 'src/refresh-token/services/interfaces/refresh-token.service.interface.js';
 import { Admin2faResetDto } from '../dtos/admin-2fa-reset.dto.js';
 
-// Payload interno del JWT pending — incluye jti para referenciar el challenge en Redis
 interface PendingJwtPayload {
   sub: string;
   jti: string;
@@ -44,8 +42,8 @@ export class AdminAuthService implements IAdminAuthService {
   private readonly pendingTtlMs: number;
 
   constructor(
-    @InjectRepository(AdminEntity)
-    private readonly adminRepository: Repository<AdminEntity>,
+    @Inject('IAdminRepository')
+    private readonly adminRepository: IAdminRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @Inject('IRefreshTokenService')
@@ -71,7 +69,6 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   // ── Cifrado AES-256-GCM para el secret TOTP ──────────────────────────────
-
   private encryptTotp(plain: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.totpEncryptionKey, iv);
@@ -91,50 +88,31 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   // ── Pending token ─────────────────────────────────────────────────────────
-
-  private async issuePendingToken(
-    adminId: string,
-    purpose: '2fa-setup' | '2fa-confirm',
-  ): Promise<string> {
+  private async issuePendingToken(adminId: string, purpose: '2fa-setup' | '2fa-confirm'): Promise<string> {
     const jti = randomUUID();
     const ttlSeconds = Math.floor(this.pendingTtlMs / 1000);
-
-    // Primero crear el challenge en Redis — si falla, no emitimos el JWT
     await this.pendingChallengeService.create(jti, adminId, purpose);
-
     return this.jwtService.signAsync(
       { sub: adminId, jti, purpose, type: 'pending-2fa' },
       { secret: this.pendingSecret, expiresIn: ttlSeconds } as JwtSignOptions,
     );
   }
 
-  private async verifyPendingToken(
-    token: string,
-    expectedPurpose: '2fa-setup' | '2fa-confirm',
-  ): Promise<{ sub: string; jti: string }> {
+  private async verifyPendingToken(token: string, expectedPurpose: '2fa-setup' | '2fa-confirm'): Promise<{ sub: string; jti: string }> {
     let payload: PendingJwtPayload;
     try {
-      payload = await this.jwtService.verifyAsync<PendingJwtPayload>(token, {
-        secret: this.pendingSecret,
-      });
+      payload = await this.jwtService.verifyAsync<PendingJwtPayload>(token, { secret: this.pendingSecret });
     } catch {
       throw new UnauthorizedException('Token de sesión pendiente inválido o expirado.');
     }
-
     if (payload.type !== 'pending-2fa') {
       throw new UnauthorizedException('Token inválido.');
     }
-
-    // verify lanza UnauthorizedException si el challenge no existe en Redis
-    // o si el purpose no coincide. También lanza ServiceUnavailableException
-    // si Redis no está disponible — nunca hace fallback a aceptar el JWT solo.
     await this.pendingChallengeService.verify(payload.jti, expectedPurpose);
-
     return { sub: payload.sub, jti: payload.jti };
   }
 
   // ── Emisión de tokens reales ──────────────────────────────────────────────
-
   private async issueTokenPair(admin: AdminEntity): Promise<TokenResponseDto> {
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
@@ -163,16 +141,13 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   // ── Métodos públicos ──────────────────────────────────────────────────────
-
   async login(dto: AdminLoginRequestDto): Promise<AdminLoginResponseDto> {
-    const admin = await this.adminRepository.findOne({ where: { username: dto.username } });
+    const admin = await this.adminRepository.findByUsername(dto.username);
     if (!admin) throw new UnauthorizedException('Credenciales inválidas.');
 
     const valid = await bcrypt.compare(dto.password, admin.password);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas.');
 
-    // El purpose del pending token depende de si el admin ya tiene 2FA configurado.
-    // Un token con purpose 'setup' no puede usarse en /2fa/confirm y viceversa.
     const purpose = admin.totpEnabled ? '2fa-confirm' : '2fa-setup';
     const pending_token = await this.issuePendingToken(admin.id, purpose);
 
@@ -183,36 +158,23 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async setup2fa(dto: Admin2faSetupRequestDto): Promise<Admin2faSetupResponseDto> {
-    // verifyPendingToken valida firma JWT + challenge Redis + purpose '2fa-setup'
     const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-setup');
-
-    const admin = await this.adminRepository.findOne({ where: { id: sub } });
+    const admin = await this.adminRepository.findById(sub);
     if (!admin) throw new UnauthorizedException('Admin no encontrado.');
 
-    // Problema 1: rechazar si el admin ya tiene 2FA activo.
-    // Con el mecanismo de purpose esto ya está cubierto (el login emite un token
-    // con purpose '2fa-confirm' si totpEnabled === true), pero lo verificamos
-    // explícitamente como segunda línea de defensa.
     if (admin.totpEnabled) {
-      throw new ForbiddenException(
-        'El 2FA ya está configurado. Para regenerarlo usá /admin/auth/2fa/reset.',
-      );
+      throw new ForbiddenException('El 2FA ya está configurado. Para regenerarlo usá /admin/auth/2fa/reset.');
     }
 
-    // Consumir el challenge atómicamente — después de esto, pending_token_1 no
-    // puede reutilizarse ni siquiera si el JWT sigue siendo válido.
     await this.pendingChallengeService.consume(jti, '2fa-setup');
 
-    // Generar nuevo secret TOTP
     const plainSecret = authenticator.generateSecret();
     admin.totpSecret = this.encryptTotp(plainSecret);
-    // No activamos todavía — se activa en confirm2fa
+    
     await this.adminRepository.save(admin);
     const otpAuthUrl = authenticator.keyuri(admin.username, this.configService.getOrThrow<string>('APP_NAME'), plainSecret);
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
 
-    // Emitir un nuevo pending token con purpose '2fa-confirm' para el siguiente paso.
-    // El admin ahora debe confirmar el código TOTP para activar el 2FA.
     const confirm_pending_token = await this.issuePendingToken(admin.id, '2fa-confirm');
 
     return {
@@ -223,36 +185,23 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async confirm2fa(dto: Admin2faConfirmDto): Promise<TokenResponseDto> {
-    // Verificar JWT + challenge Redis + purpose — sin consumir todavía.
-    // El challenge solo se consume si el código TOTP es correcto.
     const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-confirm');
-
-    const admin = await this.adminRepository.findOne({ where: { id: sub } });
+    const admin = await this.adminRepository.findById(sub);
+    
     if (!admin || !admin.totpSecret) {
       throw new UnauthorizedException('Primero debés configurar el 2FA con /2fa/setup.');
     }
 
     const plainSecret = this.decryptTotp(admin.totpSecret);
     const totpValid = authenticator.verify({ token: dto.totp_code, secret: plainSecret });
-
-    // recordAttempt maneja el contador de intentos y el consumo atómico del challenge.
     const result = await this.pendingChallengeService.recordAttempt(jti, '2fa-confirm', totpValid);
 
     if (!result.ok) {
-      if (result.reason === 'redis_unavailable') {
-        throw new ServiceUnavailableException(
-          'El servicio de autenticación no está disponible. Intentá de nuevo.',
-        );
-      }
-      if (result.reason === 'max_attempts') {
-        throw new UnauthorizedException(
-          'Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.',
-        );
-      }
+      if (result.reason === 'redis_unavailable') throw new ServiceUnavailableException('El servicio de autenticación no está disponible. Intentá de nuevo.');
+      if (result.reason === 'max_attempts') throw new UnauthorizedException('Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.');
       throw new UnauthorizedException('Código 2FA inválido.');
     }
 
-    // Activar 2FA definitivamente
     admin.totpEnabled = true;
     await this.adminRepository.save(admin);
 
@@ -260,30 +209,20 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async validate2fa(dto: Admin2faValidateDto): Promise<TokenResponseDto> {
-    // Mismo mecanismo que confirm2fa pero para logins posteriores.
     const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-confirm');
-
-    const admin = await this.adminRepository.findOne({ where: { id: sub } });
+    const admin = await this.adminRepository.findById(sub);
+    
     if (!admin || !admin.totpEnabled || !admin.totpSecret) {
       throw new UnauthorizedException('2FA no configurado para este admin.');
     }
 
     const plainSecret = this.decryptTotp(admin.totpSecret);
     const totpValid = authenticator.verify({ token: dto.totp_code, secret: plainSecret });
-
     const result = await this.pendingChallengeService.recordAttempt(jti, '2fa-confirm', totpValid);
 
     if (!result.ok) {
-      if (result.reason === 'redis_unavailable') {
-        throw new ServiceUnavailableException(
-          'El servicio de autenticación no está disponible. Intentá de nuevo.',
-        );
-      }
-      if (result.reason === 'max_attempts') {
-        throw new UnauthorizedException(
-          'Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.',
-        );
-      }
+      if (result.reason === 'redis_unavailable') throw new ServiceUnavailableException('El servicio de autenticación no está disponible. Intentá de nuevo.');
+      if (result.reason === 'max_attempts') throw new UnauthorizedException('Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.');
       throw new UnauthorizedException('Código 2FA inválido.');
     }
 
@@ -291,7 +230,7 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async reset2fa(adminId: string, dto: Admin2faResetDto): Promise<void> {
-    const admin = await this.adminRepository.findOne({ where: { id: adminId } });
+    const admin = await this.adminRepository.findById(adminId);
     if (!admin) throw new UnauthorizedException('Admin no encontrado.');
 
     const valid = await bcrypt.compare(dto.password, admin.password);
@@ -312,13 +251,10 @@ export class AdminAuthService implements IAdminAuthService {
       throw new UnauthorizedException('Refresh token inválido o expirado.');
     }
 
-    if (payload.type !== 'refresh') {
-      throw new UnauthorizedException('El token proporcionado no es un refresh token.');
-    }
+    if (payload.type !== 'refresh') throw new UnauthorizedException('El token proporcionado no es un refresh token.');
 
     const record = await this.refreshTokenService.consume(dto.refresh_token);
-
-    const admin = await this.adminRepository.findOne({ where: { id: payload.sub } });
+    const admin = await this.adminRepository.findById(payload.sub);
     if (!admin) throw new UnauthorizedException('Admin no encontrado.');
 
     const [newAccessToken, newRefreshToken] = await Promise.all([

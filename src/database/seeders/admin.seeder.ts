@@ -1,15 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { AdminEntity } from '../../admin/entities/admin.entity.js';
+import type { IAdminRepository } from '../../admin/repositories/interfaces/admin.repository.interface.js';
 
 @Injectable()
 export class AdminSeeder {
   constructor(
-    @InjectRepository(AdminEntity)
-    private readonly adminRepository: Repository<AdminEntity>,
+    @Inject('IAdminRepository')
+    private readonly adminRepository: IAdminRepository,
     private readonly configService: ConfigService,
   ) {}
 
@@ -24,7 +22,7 @@ export class AdminSeeder {
     const username = this.configService.getOrThrow<string>('ADMIN_USERNAME_SEEDER');
     const password = this.configService.getOrThrow<string>('ADMIN_PASSWORD_SEEDER');
 
-    const exists = await this.adminRepository.findOne({ where: { username } });
+    const exists = await this.adminRepository.findByUsername(username);
     if (exists) return;
 
     const hashed = await bcrypt.hash(password, 12);
