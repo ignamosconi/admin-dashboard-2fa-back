@@ -12,7 +12,6 @@ interface RequestWithAdmin {
   admin: AdminJwtPayloadDto;
 }
 
-
 @ApiTags('Admin — Gestión de administradores')
 @ApiBearerAuth('admin-jwt')
 @UseGuards(AdminJwtGuard)
@@ -48,9 +47,10 @@ export class AdminController implements IAdminController {
 
   @ApiOperation({
     summary: 'Actualizar propio usuario',
-    description: 'Un admin solo puede editar su propio usuario y contraseña.',
+    description: 'Un admin solo puede editar su propio usuario y contraseña confirmando su contraseña actual.',
   })
   @ApiResponse({ status: 200, type: AdminResponseDto })
+  @ApiResponse({ status: 400, description: 'Contraseña actual incorrecta' })
   @ApiResponse({ status: 404, description: 'Admin no encontrado' })
   @Patch('me')
   updateSelf(@Body() dto: UpdateAdminDto, @Request() req: RequestWithAdmin): Promise<AdminResponseDto> {

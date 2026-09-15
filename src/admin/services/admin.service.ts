@@ -47,12 +47,22 @@ export class AdminService implements IAdminService {
   async updateSelf(id: string, dto: UpdateAdminDto): Promise<AdminResponseDto> {
     const admin = await this.adminRepository.findById(id);
     if (!admin) throw new NotFoundException(`Admin con id ${id} no encontrado.`);
+
+    const isPasswordValid = await bcrypt.compare(dto.currentPassword, admin.password);
+    if (!isPasswordValid) {
+      throw new BadRequestException('La contraseña actual es incorrecta.');
+    }
+
     if (dto.username && dto.username !== admin.username) {
       const exists = await this.adminRepository.findByUsername(dto.username);
       if (exists) throw new ConflictException(`El username "${dto.username}" ya está en uso.`);
       admin.username = dto.username;
     }
-    if (dto.password) admin.password = await bcrypt.hash(dto.password, 12);
+
+    if (dto.password) {
+      admin.password = await bcrypt.hash(dto.password, 12);
+    }
+
     return this.toDto(await this.adminRepository.save(admin));
   }
 
@@ -62,10 +72,6 @@ export class AdminService implements IAdminService {
     const total = await this.adminRepository.count();
     if (total <= 1) throw new BadRequestException('No se puede eliminar el último administrador del sistema.');
     
-    //Quitamos todos los refresh tokens activos del admin antes de eliminarlo, para que no pueda renovar sesión tras ser borrado.
-    //NOTA: el access token vigente puede seguir siendo válido hasta su vencimiento (JWT_ADMIN_ACCESS_EXPIRES_IN, por defecto 15 minutos).
-    //Se asume este riesgo como aceptable dado el contexto de uso interno del SSO, y para evitar mantener una blacklist de JWT
-    //o consultar el estado del usuario en cada request. Justamente, para eso se separa en access y refresh, el access es stateless.
     await this.adminRepository.transaction(async (manager) => {
       await this.refreshTokenService.revokeAllForSub(id, manager);
       await this.adminRepository.remove(admin, manager);

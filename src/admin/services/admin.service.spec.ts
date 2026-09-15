@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { AdminService } from './admin.service.js';
 import { AdminEntity } from '../entities/admin.entity.js';
 
@@ -24,7 +25,6 @@ type MockRepository = {
 type MockRefreshTokenService = {
   revokeAllForSub: jest.Mock;
 };
-
 
 function makeAdmin(overrides: Partial<AdminEntity> = {}): AdminEntity {
   return {
@@ -113,6 +113,73 @@ describe('AdminService', () => {
     });
   });
 
+  describe('updateSelf', () => {
+    it('debería lanzar NotFoundException si el admin no existe', async () => {
+      mockRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.updateSelf('inexistente', { currentPassword: 'password123' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('debería lanzar BadRequestException si la contraseña actual es incorrecta', async () => {
+      mockRepo.findOne.mockResolvedValue(makeAdmin());
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+
+      await expect(
+        service.updateSelf('uuid-1', { currentPassword: 'wrong_password' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('debería lanzar ConflictException si intenta cambiar a un username que ya existe', async () => {
+      mockRepo.findOne
+        .mockResolvedValueOnce(makeAdmin({ username: 'admin' })) // Primer llamado (buscar mi admin)
+        .mockResolvedValueOnce(makeAdmin({ id: 'uuid-2', username: 'nuevo_username' })); // Segundo llamado (validar duplicado)
+
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+
+      await expect(
+        service.updateSelf('uuid-1', {
+          username: 'nuevo_username',
+          currentPassword: 'password123',
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('debería actualizar el usuario correctamente si la contraseña actual es correcta', async () => {
+      const adminEntity = makeAdmin({ username: 'admin' });
+      mockRepo.findOne
+        .mockResolvedValueOnce(adminEntity) // Buscar mi admin
+        .mockResolvedValueOnce(null); // Validar que el username nuevo está libre
+
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      mockRepo.save.mockImplementation(async (entity) => entity);
+
+      const result = await service.updateSelf('uuid-1', {
+        username: 'admin_nuevo',
+        currentPassword: 'password123',
+      });
+
+      expect(result.username).toBe('admin_nuevo');
+      expect(mockRepo.save).toHaveBeenCalled();
+    });
+
+    it('debería actualizar la contraseña si se envía una nueva y la actual es correcta', async () => {
+      const adminEntity = makeAdmin();
+      mockRepo.findOne.mockResolvedValue(adminEntity);
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue('new_hashed_password' as never);
+      mockRepo.save.mockImplementation(async (entity) => entity);
+
+      await service.updateSelf('uuid-1', {
+        password: 'new_password123',
+        currentPassword: 'password123',
+      });
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('new_password123', 12);
+      expect(mockRepo.save).toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('debería lanzar NotFoundException si el admin no existe', async () => {
       mockRepo.findOne.mockResolvedValue(null);
@@ -129,7 +196,6 @@ describe('AdminService', () => {
       mockRepo.findOne.mockResolvedValue(makeAdmin());
       mockRepo.count.mockResolvedValue(2);
 
-      // Simular que transaction ejecuta el callback
       mockRepo.manager.transaction.mockImplementation(
         async (
           cb: (manager: MockEntityManager) => Promise<void>,
