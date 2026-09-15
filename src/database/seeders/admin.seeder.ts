@@ -15,12 +15,18 @@ export class AdminSeeder {
     const env = this.configService.get<string>('NODE_ENV') ?? 'development';
 
     if (env === 'production') {
-      console.log('[Seeder] Entorno production detectado — seeder deshabilitado.');
+      console.log(
+        '[Seeder] Entorno production detectado — seeder deshabilitado.',
+      );
       return;
     }
 
-    const username = this.configService.getOrThrow<string>('ADMIN_USERNAME_SEEDER');
-    const password = this.configService.getOrThrow<string>('ADMIN_PASSWORD_SEEDER');
+    const username = this.configService.getOrThrow<string>(
+      'ADMIN_USERNAME_SEEDER',
+    );
+    const password = this.configService.getOrThrow<string>(
+      'ADMIN_PASSWORD_SEEDER',
+    );
 
     const exists = await this.adminRepository.findByUsername(username);
     if (exists) return;

@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AdminResponseDto {
-
   @ApiProperty({ example: 'uuid-del-admin' })
   readonly id!: string;
 

@@ -1,4 +1,10 @@
-import { Inject, Injectable, UnauthorizedException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -51,11 +57,19 @@ export class AdminAuthService implements IAdminAuthService {
     @Inject('IPendingChallengeService')
     private readonly pendingChallengeService: IPendingChallengeService,
   ) {
-    this.accessSecret = this.configService.getOrThrow<string>('JWT_ADMIN_ACCESS_SECRET');
-    this.refreshSecret = this.configService.getOrThrow<string>('JWT_ADMIN_REFRESH_SECRET');
+    this.accessSecret = this.configService.getOrThrow<string>(
+      'JWT_ADMIN_ACCESS_SECRET',
+    );
+    this.refreshSecret = this.configService.getOrThrow<string>(
+      'JWT_ADMIN_REFRESH_SECRET',
+    );
     this.pendingSecret = this.accessSecret;
-    this.accessExpiresIn = this.configService.getOrThrow<string>('JWT_ADMIN_ACCESS_EXPIRES_IN');
-    this.refreshExpiresIn = this.configService.getOrThrow<string>('JWT_ADMIN_REFRESH_EXPIRES_IN');
+    this.accessExpiresIn = this.configService.getOrThrow<string>(
+      'JWT_ADMIN_ACCESS_EXPIRES_IN',
+    );
+    this.refreshExpiresIn = this.configService.getOrThrow<string>(
+      'JWT_ADMIN_REFRESH_EXPIRES_IN',
+    );
     this.pendingTtlMs = parseInt(
       this.configService.getOrThrow<string>('PENDING_2FA_TTL_MS'),
       10,
@@ -63,7 +77,9 @@ export class AdminAuthService implements IAdminAuthService {
 
     const keyHex = this.configService.getOrThrow<string>('TOTP_ENCRYPTION_KEY');
     if (keyHex.length !== 64) {
-      throw new Error('TOTP_ENCRYPTION_KEY debe ser exactamente 64 caracteres hex (32 bytes).');
+      throw new Error(
+        'TOTP_ENCRYPTION_KEY debe ser exactamente 64 caracteres hex (32 bytes).',
+      );
     }
     this.totpEncryptionKey = Buffer.from(keyHex, 'hex');
   }
@@ -72,7 +88,10 @@ export class AdminAuthService implements IAdminAuthService {
   private encryptTotp(plain: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.totpEncryptionKey, iv);
-    const encrypted = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+    const encrypted = Buffer.concat([
+      cipher.update(plain, 'utf8'),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
   }
@@ -82,13 +101,23 @@ export class AdminAuthService implements IAdminAuthService {
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
     const ciphertext = Buffer.from(ciphertextHex, 'hex');
-    const decipher = createDecipheriv('aes-256-gcm', this.totpEncryptionKey, iv);
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      this.totpEncryptionKey,
+      iv,
+    );
     decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]).toString('utf8');
   }
 
   // ── Pending token ─────────────────────────────────────────────────────────
-  private async issuePendingToken(adminId: string, purpose: '2fa-setup' | '2fa-confirm'): Promise<string> {
+  private async issuePendingToken(
+    adminId: string,
+    purpose: '2fa-setup' | '2fa-confirm',
+  ): Promise<string> {
     const jti = randomUUID();
     const ttlSeconds = Math.floor(this.pendingTtlMs / 1000);
     await this.pendingChallengeService.create(jti, adminId, purpose);
@@ -98,12 +127,19 @@ export class AdminAuthService implements IAdminAuthService {
     );
   }
 
-  private async verifyPendingToken(token: string, expectedPurpose: '2fa-setup' | '2fa-confirm'): Promise<{ sub: string; jti: string }> {
+  private async verifyPendingToken(
+    token: string,
+    expectedPurpose: '2fa-setup' | '2fa-confirm',
+  ): Promise<{ sub: string; jti: string }> {
     let payload: PendingJwtPayload;
     try {
-      payload = await this.jwtService.verifyAsync<PendingJwtPayload>(token, { secret: this.pendingSecret });
+      payload = await this.jwtService.verifyAsync<PendingJwtPayload>(token, {
+        secret: this.pendingSecret,
+      });
     } catch {
-      throw new UnauthorizedException('Token de sesión pendiente inválido o expirado.');
+      throw new UnauthorizedException(
+        'Token de sesión pendiente inválido o expirado.',
+      );
     }
     if (payload.type !== 'pending-2fa') {
       throw new UnauthorizedException('Token inválido.');
@@ -117,11 +153,17 @@ export class AdminAuthService implements IAdminAuthService {
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
         { sub: admin.id, username: admin.username, type: 'access' },
-        { secret: this.accessSecret, expiresIn: this.accessExpiresIn } as JwtSignOptions,
+        {
+          secret: this.accessSecret,
+          expiresIn: this.accessExpiresIn,
+        } as JwtSignOptions,
       ),
       this.jwtService.signAsync(
         { sub: admin.id, type: 'refresh', jti: randomUUID() },
-        { secret: this.refreshSecret, expiresIn: this.refreshExpiresIn } as JwtSignOptions,
+        {
+          secret: this.refreshSecret,
+          expiresIn: this.refreshExpiresIn,
+        } as JwtSignOptions,
       ),
     ]);
 
@@ -157,25 +199,39 @@ export class AdminAuthService implements IAdminAuthService {
     };
   }
 
-  async setup2fa(dto: Admin2faSetupRequestDto): Promise<Admin2faSetupResponseDto> {
-    const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-setup');
+  async setup2fa(
+    dto: Admin2faSetupRequestDto,
+  ): Promise<Admin2faSetupResponseDto> {
+    const { sub, jti } = await this.verifyPendingToken(
+      dto.pending_token,
+      '2fa-setup',
+    );
     const admin = await this.adminRepository.findById(sub);
     if (!admin) throw new UnauthorizedException('Admin no encontrado.');
 
     if (admin.totpEnabled) {
-      throw new ForbiddenException('El 2FA ya está configurado. Para regenerarlo usá /admin/auth/2fa/reset.');
+      throw new ForbiddenException(
+        'El 2FA ya está configurado. Para regenerarlo usá /admin/auth/2fa/reset.',
+      );
     }
 
     await this.pendingChallengeService.consume(jti, '2fa-setup');
 
     const plainSecret = authenticator.generateSecret();
     admin.totpSecret = this.encryptTotp(plainSecret);
-    
+
     await this.adminRepository.save(admin);
-    const otpAuthUrl = authenticator.keyuri(admin.username, this.configService.getOrThrow<string>('APP_NAME'), plainSecret);
+    const otpAuthUrl = authenticator.keyuri(
+      admin.username,
+      this.configService.getOrThrow<string>('APP_NAME'),
+      plainSecret,
+    );
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
 
-    const confirm_pending_token = await this.issuePendingToken(admin.id, '2fa-confirm');
+    const confirm_pending_token = await this.issuePendingToken(
+      admin.id,
+      '2fa-confirm',
+    );
 
     return {
       qrCodeDataUrl,
@@ -185,20 +241,38 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async confirm2fa(dto: Admin2faConfirmDto): Promise<TokenResponseDto> {
-    const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-confirm');
+    const { sub, jti } = await this.verifyPendingToken(
+      dto.pending_token,
+      '2fa-confirm',
+    );
     const admin = await this.adminRepository.findById(sub);
-    
+
     if (!admin || !admin.totpSecret) {
-      throw new UnauthorizedException('Primero debés configurar el 2FA con /2fa/setup.');
+      throw new UnauthorizedException(
+        'Primero debés configurar el 2FA con /2fa/setup.',
+      );
     }
 
     const plainSecret = this.decryptTotp(admin.totpSecret);
-    const totpValid = authenticator.verify({ token: dto.totp_code, secret: plainSecret });
-    const result = await this.pendingChallengeService.recordAttempt(jti, '2fa-confirm', totpValid);
+    const totpValid = authenticator.verify({
+      token: dto.totp_code,
+      secret: plainSecret,
+    });
+    const result = await this.pendingChallengeService.recordAttempt(
+      jti,
+      '2fa-confirm',
+      totpValid,
+    );
 
     if (!result.ok) {
-      if (result.reason === 'redis_unavailable') throw new ServiceUnavailableException('El servicio de autenticación no está disponible. Intentá de nuevo.');
-      if (result.reason === 'max_attempts') throw new UnauthorizedException('Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.');
+      if (result.reason === 'redis_unavailable')
+        throw new ServiceUnavailableException(
+          'El servicio de autenticación no está disponible. Intentá de nuevo.',
+        );
+      if (result.reason === 'max_attempts')
+        throw new UnauthorizedException(
+          'Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.',
+        );
       throw new UnauthorizedException('Código 2FA inválido.');
     }
 
@@ -209,20 +283,36 @@ export class AdminAuthService implements IAdminAuthService {
   }
 
   async validate2fa(dto: Admin2faValidateDto): Promise<TokenResponseDto> {
-    const { sub, jti } = await this.verifyPendingToken(dto.pending_token, '2fa-confirm');
+    const { sub, jti } = await this.verifyPendingToken(
+      dto.pending_token,
+      '2fa-confirm',
+    );
     const admin = await this.adminRepository.findById(sub);
-    
+
     if (!admin || !admin.totpEnabled || !admin.totpSecret) {
       throw new UnauthorizedException('2FA no configurado para este admin.');
     }
 
     const plainSecret = this.decryptTotp(admin.totpSecret);
-    const totpValid = authenticator.verify({ token: dto.totp_code, secret: plainSecret });
-    const result = await this.pendingChallengeService.recordAttempt(jti, '2fa-confirm', totpValid);
+    const totpValid = authenticator.verify({
+      token: dto.totp_code,
+      secret: plainSecret,
+    });
+    const result = await this.pendingChallengeService.recordAttempt(
+      jti,
+      '2fa-confirm',
+      totpValid,
+    );
 
     if (!result.ok) {
-      if (result.reason === 'redis_unavailable') throw new ServiceUnavailableException('El servicio de autenticación no está disponible. Intentá de nuevo.');
-      if (result.reason === 'max_attempts') throw new UnauthorizedException('Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.');
+      if (result.reason === 'redis_unavailable')
+        throw new ServiceUnavailableException(
+          'El servicio de autenticación no está disponible. Intentá de nuevo.',
+        );
+      if (result.reason === 'max_attempts')
+        throw new UnauthorizedException(
+          'Demasiados intentos fallidos. El proceso de verificación fue cancelado. Volvé a iniciar sesión.',
+        );
       throw new UnauthorizedException('Código 2FA inválido.');
     }
 
@@ -244,14 +334,20 @@ export class AdminAuthService implements IAdminAuthService {
   async refresh(dto: AdminRefreshRequestDto): Promise<TokenResponseDto> {
     let payload: { sub: string; type: string };
     try {
-      payload = await this.jwtService.verifyAsync<{ sub: string; type: string }>(dto.refresh_token, {
+      payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        type: string;
+      }>(dto.refresh_token, {
         secret: this.refreshSecret,
       });
     } catch {
       throw new UnauthorizedException('Refresh token inválido o expirado.');
     }
 
-    if (payload.type !== 'refresh') throw new UnauthorizedException('El token proporcionado no es un refresh token.');
+    if (payload.type !== 'refresh')
+      throw new UnauthorizedException(
+        'El token proporcionado no es un refresh token.',
+      );
 
     const record = await this.refreshTokenService.consume(dto.refresh_token);
     const admin = await this.adminRepository.findById(payload.sub);
@@ -260,11 +356,17 @@ export class AdminAuthService implements IAdminAuthService {
     const [newAccessToken, newRefreshToken] = await Promise.all([
       this.jwtService.signAsync(
         { sub: admin.id, username: admin.username, type: 'access' },
-        { secret: this.accessSecret, expiresIn: this.accessExpiresIn } as JwtSignOptions,
+        {
+          secret: this.accessSecret,
+          expiresIn: this.accessExpiresIn,
+        } as JwtSignOptions,
       ),
       this.jwtService.signAsync(
         { sub: admin.id, type: 'refresh', jti: randomUUID() },
-        { secret: this.refreshSecret, expiresIn: this.refreshExpiresIn } as JwtSignOptions,
+        {
+          secret: this.refreshSecret,
+          expiresIn: this.refreshExpiresIn,
+        } as JwtSignOptions,
       ),
     ]);
 
@@ -292,11 +394,16 @@ export class AdminAuthService implements IAdminAuthService {
     const unit = value.slice(-1);
     const amount = parseInt(value.slice(0, -1), 10);
     switch (unit) {
-      case 's': return amount;
-      case 'm': return amount * 60;
-      case 'h': return amount * 60 * 60;
-      case 'd': return amount * 60 * 60 * 24;
-      default:  return parseInt(value, 10);
+      case 's':
+        return amount;
+      case 'm':
+        return amount * 60;
+      case 'h':
+        return amount * 60 * 60;
+      case 'd':
+        return amount * 60 * 60 * 24;
+      default:
+        return parseInt(value, 10);
     }
   }
 }

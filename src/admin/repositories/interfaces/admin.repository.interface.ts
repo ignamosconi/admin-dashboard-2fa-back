@@ -8,5 +8,7 @@ export interface IAdminRepository {
   save(admin: Partial<AdminEntity>): Promise<AdminEntity>;
   count(): Promise<number>;
   remove(admin: AdminEntity, manager?: EntityManager): Promise<void>;
-  transaction<T>(runInTransaction: (manager: EntityManager) => Promise<T>): Promise<T>;
+  transaction<T>(
+    runInTransaction: (manager: EntityManager) => Promise<T>,
+  ): Promise<T>;
 }

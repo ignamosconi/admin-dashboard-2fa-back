@@ -31,10 +31,7 @@ import { AdminSeeder } from './database/seeders/admin.seeder.js';
         username: configService.getOrThrow<string>('DB_USERNAME'),
         password: configService.getOrThrow<string>('DB_PASSWORD'),
         database: configService.getOrThrow<string>('DB_NAME'),
-        entities: [
-          AdminEntity, 
-          RefreshTokenEntity,
-        ],
+        entities: [AdminEntity, RefreshTokenEntity],
         synchronize: false,
         migrations: [join(__dirname, 'database', 'migrations', '*.js')],
         migrationsRun: true,
@@ -44,20 +41,19 @@ import { AdminSeeder } from './database/seeders/admin.seeder.js';
     ThrottlerModule.forRoot([
       {
         name: 'global',
-        ttl: 60000,   // ventana de 60 segundos
-        limit: 30,    // máximo 30 requests por IP en esa ventana (endpoints generales)
+        ttl: 60000, // ventana de 60 segundos
+        limit: 30, // máximo 30 requests por IP en esa ventana (endpoints generales)
       },
     ]),
     AdminModule,
     AdminAuthModule,
   ],
-  providers: [    
+  providers: [
     AdminSeeder,
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
   ],
-  
 })
 export class AppModule {}

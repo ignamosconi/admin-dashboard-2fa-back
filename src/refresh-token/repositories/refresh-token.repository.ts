@@ -32,7 +32,9 @@ export class RefreshTokenRepository implements IRefreshTokenRepository {
       .execute();
 
     if (result.affected === 0) return null;
-    return result.raw[0] as RefreshTokenEntity;
+
+    const rawRecords = result.raw as RefreshTokenEntity[];
+    return rawRecords[0] ?? null;
   }
 
   async revokeFamily(familyId: string): Promise<void> {
@@ -40,7 +42,9 @@ export class RefreshTokenRepository implements IRefreshTokenRepository {
   }
 
   async revokeAllForSub(sub: string, manager?: EntityManager): Promise<void> {
-    const repo = manager ? manager.getRepository(RefreshTokenEntity) : this.repo;
+    const repo = manager
+      ? manager.getRepository(RefreshTokenEntity)
+      : this.repo;
     await repo.update({ sub, revoked: false }, { revoked: true });
   }
 

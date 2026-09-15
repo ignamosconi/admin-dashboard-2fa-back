@@ -1,16 +1,15 @@
-jest.mock('bcrypt', () => ({
-  compare: jest.fn(),
-  hash: jest.fn(),
-}));
-
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminEntity } from '../../admin/entities/admin.entity.js';
 import * as bcrypt from 'bcrypt';
+
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+  hash: jest.fn(),
+}));
 
 const TOTP_KEY = 'b'.repeat(64);
 const ACCESS_SECRET = 'access-secret';
@@ -39,7 +38,8 @@ describe('AdminAuthService', () => {
 
   beforeEach(async () => {
     mockRepo = {
-      findOne: jest.fn(),
+      findByUsername: jest.fn(),
+      findById: jest.fn(),
       save: jest.fn(),
     };
 
@@ -54,11 +54,6 @@ describe('AdminAuthService', () => {
       revokeFamily: jest.fn().mockResolvedValue(undefined),
     };
 
-    // Mock del PendingChallengeService — simula Redis sin necesitar conexión real.
-    // create: registra el challenge exitosamente.
-    // verify: valida el challenge exitosamente (no lanza).
-    // consume: consume el challenge exitosamente (no lanza).
-    // recordAttempt: por defecto simula código correcto.
     mockPendingChallengeService = {
       create: jest.fn().mockResolvedValue(undefined),
       verify: jest.fn().mockResolvedValue({ adminId: 'admin-uuid' }),
@@ -69,10 +64,13 @@ describe('AdminAuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminAuthService,
-        { provide: getRepositoryToken(AdminEntity), useValue: mockRepo },
+        { provide: 'IAdminRepository', useValue: mockRepo },
         { provide: JwtService, useValue: mockJwtService },
         { provide: 'IRefreshTokenService', useValue: mockRefreshTokenService },
-        { provide: 'IPendingChallengeService', useValue: mockPendingChallengeService },
+        {
+          provide: 'IPendingChallengeService',
+          useValue: mockPendingChallengeService,
+        },
         {
           provide: ConfigService,
           useValue: {
@@ -100,9 +98,12 @@ describe('AdminAuthService', () => {
     it('debería retornar pending_token con requires_2fa_setup=true si el admin no tiene 2FA', async () => {
       const admin = makeAdmin();
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockRepo.findOne.mockResolvedValue(admin);
+      mockRepo.findByUsername.mockResolvedValue(admin);
 
-      const result = await service.login({ username: 'admin', password: 'password123' });
+      const result = await service.login({
+        username: 'admin',
+        password: 'password123',
+      });
 
       expect(result.pending_token).toBeDefined();
       expect(result.requires_2fa_setup).toBe(true);
@@ -111,39 +112,49 @@ describe('AdminAuthService', () => {
     it('debería retornar requires_2fa_setup=false si el admin ya tiene 2FA activo', async () => {
       const admin = makeAdmin({ totpEnabled: true });
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      mockRepo.findOne.mockResolvedValue(admin);
+      mockRepo.findByUsername.mockResolvedValue(admin);
 
-      const result = await service.login({ username: 'admin', password: 'password123' });
+      const result = await service.login({
+        username: 'admin',
+        password: 'password123',
+      });
 
       expect(result.requires_2fa_setup).toBe(false);
     });
 
     it('debería lanzar UnauthorizedException con credenciales inválidas', async () => {
-      mockRepo.findOne.mockResolvedValue(null);
-      await expect(service.login({ username: 'admin', password: 'wrong' }))
-        .rejects.toThrow(UnauthorizedException);
+      mockRepo.findByUsername.mockResolvedValue(null);
+      await expect(
+        service.login({ username: 'admin', password: 'wrong' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('debería lanzar UnauthorizedException si la password no coincide', async () => {
-      mockRepo.findOne.mockResolvedValue(makeAdmin());
+      mockRepo.findByUsername.mockResolvedValue(makeAdmin());
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      await expect(service.login({ username: 'admin', password: 'wrong' }))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.login({ username: 'admin', password: 'wrong' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
   describe('logout', () => {
     it('debería revocar la familia del refresh token', async () => {
       await service.logout({ refresh_token: 'some-refresh-token' });
-      expect(mockRefreshTokenService.revokeFamily).toHaveBeenCalledWith('some-refresh-token');
+      expect(mockRefreshTokenService.revokeFamily).toHaveBeenCalledWith(
+        'some-refresh-token',
+      );
     });
   });
 
   describe('validate2fa', () => {
     it('debería lanzar UnauthorizedException si el pending token es inválido', async () => {
-      mockJwtService.verifyAsync = jest.fn().mockRejectedValue(new Error('invalid'));
-      await expect(service.validate2fa({ pending_token: 'bad', totp_code: '123456' }))
-        .rejects.toThrow(UnauthorizedException);
+      mockJwtService.verifyAsync = jest
+        .fn()
+        .mockRejectedValue(new Error('invalid'));
+      await expect(
+        service.validate2fa({ pending_token: 'bad', totp_code: '123456' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('debería lanzar UnauthorizedException si el admin no tiene 2FA configurado', async () => {
@@ -153,10 +164,11 @@ describe('AdminAuthService', () => {
         purpose: '2fa-confirm',
         type: 'pending-2fa',
       });
-      mockRepo.findOne.mockResolvedValue(makeAdmin({ totpEnabled: false }));
+      mockRepo.findById.mockResolvedValue(makeAdmin({ totpEnabled: false }));
 
-      await expect(service.validate2fa({ pending_token: 'valid', totp_code: '123456' }))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.validate2fa({ pending_token: 'valid', totp_code: '123456' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

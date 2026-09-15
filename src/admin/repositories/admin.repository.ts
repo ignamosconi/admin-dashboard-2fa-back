@@ -41,7 +41,9 @@ export class AdminRepository implements IAdminRepository {
     }
   }
 
-  async transaction<T>(runInTransaction: (manager: EntityManager) => Promise<T>): Promise<T> {
+  async transaction<T>(
+    runInTransaction: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
     return this.repo.manager.transaction(runInTransaction);
   }
 }

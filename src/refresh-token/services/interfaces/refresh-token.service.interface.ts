@@ -1,4 +1,4 @@
-import { RefreshTokenEntity } from "src/refresh-token/entities/refresh-token.entity";
+import { RefreshTokenEntity } from 'src/refresh-token/entities/refresh-token.entity';
 import { EntityManager } from 'typeorm';
 
 export interface SaveRefreshTokenParams {
@@ -8,7 +8,7 @@ export interface SaveRefreshTokenParams {
   expiresIn: string;
   familyId?: string;
   sessionExpiresAt?: Date | null;
-  clientId?: number;                // App OAuth asociada. Obligatorio cuando type === 'student', ausente cuando type === 'admin'.
+  clientId?: number; // App OAuth asociada. Obligatorio cuando type === 'student', ausente cuando type === 'admin'.
 }
 
 export interface IRefreshTokenService {

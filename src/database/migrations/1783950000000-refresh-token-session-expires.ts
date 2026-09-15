@@ -1,7 +1,7 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class RefreshTokenSessionExpires1783950000000 implements MigrationInterface {
-  name = 'RefreshTokenSessionExpires1783950000000'
+  name = 'RefreshTokenSessionExpires1783950000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // sessionExpiresAt: límite absoluto de la sesión, se hereda en cada rotación

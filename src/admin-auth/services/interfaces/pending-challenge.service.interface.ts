@@ -7,7 +7,11 @@ export interface IPendingChallengeService {
    * Crea un challenge en Redis asociado al jti del JWT.
    * El TTL se toma de PENDING_2FA_TTL_MS.
    */
-  create(jti: string, adminId: string, purpose: '2fa-setup' | '2fa-confirm'): Promise<void>;
+  create(
+    jti: string,
+    adminId: string,
+    purpose: '2fa-setup' | '2fa-confirm',
+  ): Promise<void>;
 
   /**
    * Verifica que el challenge exista en Redis y que el purpose coincida.
@@ -15,7 +19,10 @@ export interface IPendingChallengeService {
    * Lanza ServiceUnavailableException si Redis no responde.
    * Lanza UnauthorizedException si el challenge no existe o el purpose no coincide.
    */
-  verify(jti: string, expectedPurpose: '2fa-setup' | '2fa-confirm'): Promise<{ adminId: string }>;
+  verify(
+    jti: string,
+    expectedPurpose: '2fa-setup' | '2fa-confirm',
+  ): Promise<{ adminId: string }>;
 
   /**
    * Consume el challenge atómicamente (GETDEL).
@@ -23,7 +30,10 @@ export interface IPendingChallengeService {
    * Lanza ServiceUnavailableException si Redis no responde.
    * Lanza UnauthorizedException si el challenge no existe.
    */
-  consume(jti: string, expectedPurpose: '2fa-setup' | '2fa-confirm'): Promise<{ adminId: string }>;
+  consume(
+    jti: string,
+    expectedPurpose: '2fa-setup' | '2fa-confirm',
+  ): Promise<{ adminId: string }>;
 
   /**
    * Registra un intento fallido de TOTP y consume el challenge si el intento es correcto.

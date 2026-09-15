@@ -1,10 +1,16 @@
-
-
-import { Injectable, Inject, UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  UnauthorizedException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../redis/redis.module.js';
-import { IPendingChallengeService, ChallengeConsumeResult } from './interfaces/pending-challenge.service.interface.js';
+import {
+  IPendingChallengeService,
+  ChallengeConsumeResult,
+} from './interfaces/pending-challenge.service.interface.js';
 
 interface ChallengePayload {
   adminId: string;
@@ -70,13 +76,17 @@ export class PendingChallengeService implements IPendingChallengeService {
     }
 
     if (!raw) {
-      throw new UnauthorizedException('Token de sesión pendiente inválido o expirado.');
+      throw new UnauthorizedException(
+        'Token de sesión pendiente inválido o expirado.',
+      );
     }
 
     const payload = JSON.parse(raw) as ChallengePayload;
 
     if (payload.purpose !== expectedPurpose) {
-      throw new UnauthorizedException('Token de sesión pendiente inválido para esta operación.');
+      throw new UnauthorizedException(
+        'Token de sesión pendiente inválido para esta operación.',
+      );
     }
 
     return { adminId: payload.adminId };
@@ -99,7 +109,9 @@ export class PendingChallengeService implements IPendingChallengeService {
     }
 
     if (!raw) {
-      throw new UnauthorizedException('Token de sesión pendiente inválido o expirado.');
+      throw new UnauthorizedException(
+        'Token de sesión pendiente inválido o expirado.',
+      );
     }
 
     const payload = JSON.parse(raw) as ChallengePayload;
@@ -107,7 +119,9 @@ export class PendingChallengeService implements IPendingChallengeService {
     if (payload.purpose !== expectedPurpose) {
       // El challenge ya fue eliminado en este punto — si el purpose no coincide,
       // rechazamos igual. El challenge no se puede recuperar (correcto por diseño).
-      throw new UnauthorizedException('Token de sesión pendiente inválido para esta operación.');
+      throw new UnauthorizedException(
+        'Token de sesión pendiente inválido para esta operación.',
+      );
     }
 
     return { adminId: payload.adminId };

@@ -3,12 +3,14 @@ import { EntityManager } from 'typeorm';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { RefreshTokenEntity } from '../entities/refresh-token.entity.js';
-import { IRefreshTokenService, SaveRefreshTokenParams } from './interfaces/refresh-token.service.interface.js';
+import {
+  IRefreshTokenService,
+  SaveRefreshTokenParams,
+} from './interfaces/refresh-token.service.interface.js';
 import type { IRefreshTokenRepository } from '../repositories/interfaces/refresh-token.repository.interface.js';
 
 @Injectable()
 export class RefreshTokenService implements IRefreshTokenService {
-
   constructor(
     @Inject('IRefreshTokenRepository')
     private readonly repo: IRefreshTokenRepository,
@@ -21,10 +23,15 @@ export class RefreshTokenService implements IRefreshTokenService {
   private toDate(expiresIn: string): Date {
     const unit = expiresIn.slice(-1);
     const amount = parseInt(expiresIn.slice(0, -1), 10);
-    const ms = unit === 's' ? amount * 1000
-              : unit === 'm' ? amount * 60 * 1000
-              : unit === 'h' ? amount * 60 * 60 * 1000
-              : unit === 'd' ? amount * 60 * 60 * 24 * 1000
+    const ms =
+      unit === 's'
+        ? amount * 1000
+        : unit === 'm'
+          ? amount * 60 * 1000
+          : unit === 'h'
+            ? amount * 60 * 60 * 1000
+            : unit === 'd'
+              ? amount * 60 * 60 * 24 * 1000
               : parseInt(expiresIn, 10) * 1000;
     return new Date(Date.now() + ms);
   }
@@ -48,7 +55,9 @@ export class RefreshTokenService implements IRefreshTokenService {
       const existing = await this.repo.findByTokenHash(tokenHash);
       if (existing?.used) {
         await this.repo.revokeFamily(existing.familyId);
-        throw new UnauthorizedException('Refresh token ya utilizado. Sesión revocada por seguridad.');
+        throw new UnauthorizedException(
+          'Refresh token ya utilizado. Sesión revocada por seguridad.',
+        );
       }
       throw new UnauthorizedException('Refresh token inválido o revocado.');
     }
@@ -61,7 +70,9 @@ export class RefreshTokenService implements IRefreshTokenService {
 
     if (record.sessionExpiresAt && new Date(record.sessionExpiresAt) < now) {
       await this.repo.revokeFamily(record.familyId);
-      throw new UnauthorizedException('La sesión expiró. Volvé a iniciar sesión.');
+      throw new UnauthorizedException(
+        'La sesión expiró. Volvé a iniciar sesión.',
+      );
     }
 
     return record;

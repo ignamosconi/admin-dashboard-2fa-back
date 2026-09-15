@@ -1,6 +1,23 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Inject, UseGuards, ParseUUIDPipe, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Inject,
+  UseGuards,
+  ParseUUIDPipe,
+  Request,
+} from '@nestjs/common';
 import { AdminJwtPayloadDto } from '../../admin-auth/dtos/admin-jwt-payload.dto.js';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { IAdminController } from './interfaces/admin.controller.interface.js';
 import type { IAdminService } from '../services/interfaces/admin.service.interface.js';
 import { CreateAdminDto } from '../dtos/create-admin.dto.js';
@@ -47,19 +64,26 @@ export class AdminController implements IAdminController {
 
   @ApiOperation({
     summary: 'Actualizar propio usuario',
-    description: 'Un admin solo puede editar su propio usuario y contraseña confirmando su contraseña actual.',
+    description:
+      'Un admin solo puede editar su propio usuario y contraseña confirmando su contraseña actual.',
   })
   @ApiResponse({ status: 200, type: AdminResponseDto })
   @ApiResponse({ status: 400, description: 'Contraseña actual incorrecta' })
   @ApiResponse({ status: 404, description: 'Admin no encontrado' })
   @Patch('me')
-  updateSelf(@Body() dto: UpdateAdminDto, @Request() req: RequestWithAdmin): Promise<AdminResponseDto> {
+  updateSelf(
+    @Body() dto: UpdateAdminDto,
+    @Request() req: RequestWithAdmin,
+  ): Promise<AdminResponseDto> {
     return this.adminService.updateSelf(req.admin.sub, dto);
   }
 
   @ApiOperation({ summary: 'Eliminar administrador' })
   @ApiResponse({ status: 200, description: 'Admin eliminado' })
-  @ApiResponse({ status: 400, description: 'No se puede eliminar el último admin' })
+  @ApiResponse({
+    status: 400,
+    description: 'No se puede eliminar el último admin',
+  })
   @ApiResponse({ status: 404, description: 'Admin no encontrado' })
   @Delete(':id')
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
